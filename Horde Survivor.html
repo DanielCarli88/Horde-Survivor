@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Horde Survivor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1420; --panel:#161f33; --accent:#5ad1ff; --accent2:#ff5a7a;
+    --text:#eaf2ff; --muted:#8ea0c4;
+    padding-top: env(safe-area-inset-top,0px);
+    padding-bottom: env(safe-area-inset-bottom,0px);
+    box-sizing:border-box;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){ --bg:#eef2fb; --panel:#ffffff; --text:#14213d; --muted:#5a6a8a; }
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif; overflow:hidden;}
+  #wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;padding:10px;}
+  h1{font-size:18px;margin:0;color:var(--accent);letter-spacing:.5px}
+  #hud{display:flex;gap:18px;font-size:14px;color:var(--muted);background:var(--panel);
+    padding:8px 16px;border-radius:10px;}
+  #hud b{color:var(--text)}
+  #stage-holder{position:relative;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.35);}
+  canvas{display:block}
+  #overlay{position:absolute;inset:0;background:rgba(10,14,24,.78);display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
+  #overlay h2{margin:0;font-size:22px}
+  #overlay p{margin:0;color:var(--muted);font-size:13px;max-width:320px;line-height:1.5}
+  button{background:var(--accent);color:#06121f;border:none;padding:10px 22px;border-radius:999px;
+    font-weight:700;font-size:14px;cursor:pointer;}
+  button:active{transform:scale(.97)}
+  #hint{font-size:12px;color:var(--muted);text-align:center;max-width:360px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>HORDE SURVIVOR</h1>
+  <div id="hud">
+    <div>❤️ <b id="hp">100</b></div>
+    <div>🌊 Onda <b id="wave">1</b></div>
+    <div>⭐ <b id="score">0</b></div>
+  </div>
+  <div id="stage-holder">
+    <div id="overlay">
+      <h2 id="ov-title">Sobreviva às ondas</h2>
+      <p id="ov-text">Mova-se com <b>WASD / setas</b>. Clique ou toque para atirar na direção do ponteiro. Sobreviva o máximo possível.</p>
+      <button id="btn">Jogar</button>
+    </div>
+  </div>
+  <div id="hint">Feito com PixiJS — projeto pessoal </div>
+</div>
+
+<script>
+const W = Math.min(480, window.innerWidth - 24);
+const H = Math.min(640, window.innerHeight - 160);
+
+const app = new PIXI.Application({ width: W, height: H, backgroundColor: 0x121a2b, antialias: true });
+document.getElementById('stage-holder').prepend(app.view);
+app.view.style.borderRadius = '12px';
+
+const world = new PIXI.Container();
+app.stage.addChild(world);
+
+// ---- player ----
+const player = new PIXI.Graphics();
+player.beginFill(0x5ad1ff);
+player.drawCircle(0, 0, 14);
+player.endFill();
+player.x = W/2; player.y = H/2;
+world.addChild(player);
+
+let hp = 100, score = 0, wave = 1, alive = false;
+let enemies = [], bullets = [];
+const keys = {};
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+let aim = { x: W/2, y: 0 };
+app.view.addEventListener('pointermove', e => {
+  const r = app.view.getBoundingClientRect();
+  aim.x = e.clientX - r.left; aim.y = e.clientY - r.top;
+});
+app.view.addEventListener('pointerdown', e => {
+  const r = app.view.getBoundingClientRect();
+  aim.x = e.clientX - r.left; aim.y = e.clientY - r.top;
+  if (alive) shoot();
+});
+
+function shoot(){
+  const dx = aim.x - player.x, dy = aim.y - player.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const b = new PIXI.Graphics();
+  b.beginFill(0xffe15a); b.drawCircle(0,0,4); b.endFill();
+  b.x = player.x; b.y = player.y;
+  b.vx = dx/len * 7; b.vy = dy/len * 7;
+  world.addChild(b);
+  bullets.push(b);
+}
+
+function spawnEnemy(){
+  const edge = Math.floor(Math.random()*4);
+  let x,y;
+  if (edge===0){x=Math.random()*W; y=-20;}
+  else if (edge===1){x=W+20; y=Math.random()*H;}
+  else if (edge===2){x=Math.random()*W; y=H+20;}
+  else {x=-20; y=Math.random()*H;}
+  const g = new PIXI.Graphics();
+  g.beginFill(0xff5a7a);
+  g.drawPolygon([0,-12, 11,10, -11,10]);
+  g.endFill();
+  g.x = x; g.y = y; g.hp = 2;
+  world.addChild(g);
+  enemies.push(g);
+}
+
+let spawnTimer = 0, waveTimer = 0, spawnInterval = 70;
+
+function resetGame(){
+  enemies.forEach(e=>world.removeChild(e)); enemies=[];
+  bullets.forEach(b=>world.removeChild(b)); bullets=[];
+  hp=100; score=0; wave=1; spawnInterval=70; spawnTimer=0; waveTimer=0;
+  player.x=W/2; player.y=H/2;
+  updateHUD();
+}
+
+function updateHUD(){
+  document.getElementById('hp').textContent = Math.max(0,hp);
+  document.getElementById('wave').textContent = wave;
+  document.getElementById('score').textContent = score;
+}
+
+function gameOver(){
+  alive = false;
+  document.getElementById('ov-title').textContent = 'Fim de jogo';
+  document.getElementById('ov-text').innerHTML = `Você sobreviveu até a onda <b>${wave}</b> com <b>${score}</b> pontos.`;
+  document.getElementById('btn').textContent = 'Jogar novamente';
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+document.getElementById('btn').addEventListener('click', () => {
+  resetGame();
+  alive = true;
+  document.getElementById('overlay').classList.add('hidden');
+});
+
+app.ticker.add(() => {
+  if (!alive) return;
+
+  const speed = 3.2;
+  if (keys['w']||keys['arrowup']) player.y -= speed;
+  if (keys['s']||keys['arrowdown']) player.y += speed;
+  if (keys['a']||keys['arrowleft']) player.x -= speed;
+  if (keys['d']||keys['arrowright']) player.x += speed;
+  player.x = Math.max(14, Math.min(W-14, player.x));
+  player.y = Math.max(14, Math.min(H-14, player.y));
+
+  // spawn by wave
+  spawnTimer++;
+  if (spawnTimer > spawnInterval){
+    spawnTimer = 0;
+    spawnEnemy();
+  }
+  waveTimer++;
+  if (waveTimer > 560){ // nova onda
+    waveTimer = 0; wave++;
+    spawnInterval = Math.max(22, spawnInterval - 8);
+    for(let i=0;i<Math.min(wave,5);i++) spawnEnemy();
+  }
+
+  // bullets
+  for (let i=bullets.length-1;i>=0;i--){
+    const b = bullets[i];
+    b.x += b.vx; b.y += b.vy;
+    if (b.x<-10||b.x>W+10||b.y<-10||b.y>H+10){ world.removeChild(b); bullets.splice(i,1); continue; }
+  }
+
+  // enemies chase player
+  for (let i=enemies.length-1;i>=0;i--){
+    const e = enemies[i];
+    const dx = player.x-e.x, dy = player.y-e.y;
+    const len = Math.hypot(dx,dy)||1;
+    const espeed = 1.1 + wave*0.07;
+    e.x += dx/len*espeed; e.y += dy/len*espeed;
+    e.rotation = Math.atan2(dy,dx) + Math.PI/2;
+
+    if (len < 20){
+      hp -= 12; e.hp = 0; updateHUD();
+      if (hp<=0){ world.removeChild(e); enemies.splice(i,1); gameOver(); return; }
+    }
+
+    for (let j=bullets.length-1;j>=0;j--){
+      const b = bullets[j];
+      if (Math.hypot(b.x-e.x,b.y-e.y) < 16){
+        e.hp -= 1;
+        world.removeChild(b); bullets.splice(j,1);
+        if (e.hp<=0){ score += 10; }
+        break;
+      }
+    }
+    if (e.hp<=0 && enemies[i]){ world.removeChild(e); enemies.splice(i,1); updateHUD(); }
+  }
+});
+</script>
+</body>
+</html>
