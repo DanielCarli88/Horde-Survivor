@@ -2,8 +2,6 @@
 
 Protótipo de jogo 2D desenvolvido com **PixiJS**, em que o jogador controla um personagem e precisa sobreviver a ondas crescentes de inimigos.
 
-**[▶ Jogar online](https://claude.ai/artifact/3mswswjnwnb29HmsimzKMF)**
-
 ![status](https://img.shields.io/badge/status-prot%C3%B3tipo-9b5cff) ![engine](https://img.shields.io/badge/engine-PixiJS-5ad1ff)
 
 ## Sobre o projeto
